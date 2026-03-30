@@ -1,0 +1,100 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sensitive data)
+/local.properties
+
+# Android Studio files
+*.iml
+.idea/
+!.idea/codeStyles/
+!.idea/codeTemplates/
+
+# Android Studio captures folder
+captures/
+
+# External native build folder
+.externalNativeBuild/
+.cxx/
+
+# NDK
+obj/
+
+# IntelliJ
+*.iws
+/out/
+
+# Keystore files
+*.jks
+*.keystore
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Log files
+*.log
+
+# Windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+[Dd]esktop.ini
+
+# Linux
+*~
+
+# KDevelop
+*.kdev4
+.kdev4/
+
+# Backup files
+*.bak
+*.backup
+
+# JetBrains IDEs
+.idea/
+*.iws
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven
+target/
+
+# Android lint
+lint-report.html
+
