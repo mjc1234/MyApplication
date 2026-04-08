@@ -21,6 +21,8 @@ dependencies {
     compileOnly(libs.android.gradlePlugin)
     compileOnly(libs.android.tools.common)
     compileOnly(libs.kotlin.gradlePlugin)
+    compileOnly(libs.hilt.gradlePlugin)
+    compileOnly(libs.ksp.gradlePlugin)
 }
 
 gradlePlugin {
@@ -32,6 +34,10 @@ gradlePlugin {
         register("androidComposeLibrary") {
             id = libs.plugins.example.android.compose.library.get().pluginId
             implementationClass = "AndroidComposeLibraryConventionPlugin"
+        }
+        register("androidHilt") {
+            id = libs.plugins.example.android.hilt.get().pluginId
+            implementationClass = "HiltConventionPlugin"
         }
     }
 }
