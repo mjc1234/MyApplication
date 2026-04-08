@@ -11,12 +11,13 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.RandomAccessFile
+import javax.inject.Inject
 
 /**
  * 下载执行器
  * 封装通用的文件下载逻辑，支持断点续传和进度回调
  */
-class DownloadExecutor(
+class DownloadExecutor @Inject constructor(
     private val downloadService: DownloadService,
     private val config: DownloadConfig = DownloadConfig.default()
 ) {

@@ -6,7 +6,7 @@ import java.io.File
  * 下载配置类
  * 用于配置下载相关的参数，如超时时间、重试策略、缓存等
  *
- * 使用 DownloadHttpClient.create(config) 或 DownloadModule.createHttpClient(config) 创建客户端
+ * 通过 Hilt 注入 DownloadExecutor 时作为默认配置，或手动创建时传入自定义参数
  */
 data class DownloadConfig(
     /** 连接超时时间（毫秒），默认60秒 */

@@ -57,7 +57,7 @@ fun DownloadControls(
     onCancelDownload: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var url by rememberSaveable { mutableStateOf("http://ipv4.download.thinkbroadband.com/50MB.zip") }
+    var url by rememberSaveable { mutableStateOf("http://192.168.31.161:8000/1.png") }
     var urlError by rememberSaveable { mutableStateOf<String?>(null) }
     val keyboardController = LocalSoftwareKeyboardController.current
 

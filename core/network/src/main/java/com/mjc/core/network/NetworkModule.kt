@@ -1,115 +1,72 @@
 package com.mjc.core.network
 
+import android.content.Context
 import com.mjc.core.network.api.ApiService
-import com.mjc.core.network.client.HttpClient
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import okhttp3.Cache
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.io.File
+import java.util.concurrent.TimeUnit
+import javax.inject.Singleton
 
 /**
- * 网络模块依赖注入
+ * 网络模块 Hilt 依赖注入
  * 提供通用网络相关的依赖实例
  */
+@Module
+@InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private var retrofitCache: MutableMap<String, Retrofit> = mutableMapOf()
-    private var httpClientCache: MutableMap<String, OkHttpClient> = mutableMapOf()
-
     /**
-     * 创建Retrofit实例
-     * @param baseUrl 基础URL
-     * @param client OkHttpClient实例（可选，默认使用缓存的默认HTTP客户端）
+     * 提供默认 OkHttpClient（单例）
+     * 30秒超时，10MB 磁盘缓存
      */
-    fun createRetrofit(
-        baseUrl: String,
-        client: OkHttpClient = getOrCreateDefaultHttpClient()
-    ): Retrofit {
-        val cacheKey = generateRetrofitCacheKey(baseUrl, client)
-        return retrofitCache.getOrPut(cacheKey) {
-            val normalizedBaseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
-            Retrofit.Builder()
-                .baseUrl(normalizedBaseUrl)
-                .client(client)
-                .addConverterFactory(MoshiConverterFactory.create())
-                .build()
-        }
-    }
-
-    /**
-     * 生成HTTP客户端缓存键
-     */
-    private fun generateHttpClientCacheKey(
-        type: String,
-        cacheDir: File? = null,
-        cacheSize: Long = 0
-    ): String {
-        val cacheDirPart = cacheDir?.absolutePath ?: "no-cache"
-        return "$type:$cacheDirPart:$cacheSize"
-    }
-
-    /**
-     * 获取或创建默认HTTP客户端（带缓存）
-     * @param cacheDir 缓存目录（可选）
-     * @param cacheSize 缓存大小（字节，默认10MB）
-     */
-    fun getOrCreateDefaultHttpClient(
-        cacheDir: File? = null,
-        cacheSize: Long = 10 * 1024 * 1024 // 10MB
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(
+        @ApplicationContext context: Context
     ): OkHttpClient {
-        val cacheKey = generateHttpClientCacheKey("default", cacheDir, cacheSize)
-        return httpClientCache.getOrPut(cacheKey) {
-            HttpClient.createDefault(cacheDir, cacheSize)
-        }
+        val cacheDir = File(context.cacheDir, "http-cache")
+        return OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .cache(Cache(cacheDir, 10 * 1024 * 1024))
+            .addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    level = HttpLoggingInterceptor.Level.BASIC
+                }
+            )
+            .build()
     }
 
     /**
-     * 生成Retrofit缓存键
+     * 提供 Retrofit 实例（单例）
+     * baseUrl 为占位值，ApiService 使用 @Url 传入完整 URL
      */
-    private fun generateRetrofitCacheKey(
-        baseUrl: String,
-        client: OkHttpClient
-    ): String {
-        val normalizedBaseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
-        return "${normalizedBaseUrl}-${client.hashCode()}"
+    @Provides
+    @Singleton
+    fun provideRetrofit(client: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://placeholder.invalid/")
+            .client(client)
+            .addConverterFactory(MoshiConverterFactory.create())
+            .build()
     }
 
     /**
-     * 创建API服务实例
-     * @param baseUrl 基础URL
-     * @param serviceClass API服务接口类
-     * @param client OkHttpClient实例（可选，默认使用createDefault）
+     * 提供默认 ApiService 实例（单例）
      */
-    fun <T> createApiService(
-        baseUrl: String,
-        serviceClass: Class<T>,
-        client: OkHttpClient = getOrCreateDefaultHttpClient()
-    ): T {
-        val retrofit = createRetrofit(baseUrl, client)
-        return retrofit.create(serviceClass)
-    }
-
-    /**
-     * 创建API服务实例（使用reified类型参数）
-     * @param baseUrl 基础URL
-     * @param client OkHttpClient实例（可选，默认使用createDefault）
-     */
-    inline fun <reified T> createApiService(
-        baseUrl: String,
-        client: OkHttpClient = getOrCreateDefaultHttpClient()
-    ): T {
-        return createApiService(baseUrl, T::class.java, client)
-    }
-
-    /**
-     * 创建默认的ApiService实例
-     * @param baseUrl 基础URL
-     * @param client OkHttpClient实例（可选，默认使用createDefault）
-     */
-    fun createDefaultApiService(
-        baseUrl: String,
-        client: OkHttpClient = getOrCreateDefaultHttpClient()
-    ): ApiService {
-        return createApiService(baseUrl, ApiService::class.java, client)
+    @Provides
+    @Singleton
+    fun provideApiService(retrofit: Retrofit): ApiService {
+        return retrofit.create(ApiService::class.java)
     }
 }

@@ -6,7 +6,6 @@ import com.mjc.core.download.executor.DownloadProgressCallback
 import com.mjc.core.download.model.DownloadStatus
 import com.mjc.core.download.model.DownloadTask
 import com.mjc.core.download.model.ResumeData
-import com.mjc.core.download.service.DownloadService
 import com.mjc.core.download.utils.SpeedCalculator
 import com.mjc.feature.download.utils.FileUtils
 import kotlinx.coroutines.CancellationException
@@ -20,6 +19,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
 
 /**
  * 下载仓库
@@ -27,11 +27,10 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * 使用 DownloadExecutor 执行实际下载，自身负责任务管理
  */
-class DownloadRepository(
-    downloadService: DownloadService,
+class DownloadRepository @Inject constructor(
+    private val executor: DownloadExecutor,
     private val fileUtils: FileUtils
 ) {
-    private val executor = DownloadExecutor(downloadService)
     private val downloadTasks = ConcurrentHashMap<String, DownloadTask>()
     private val taskStateFlows = ConcurrentHashMap<String, MutableStateFlow<DownloadTask>>()
     private val allTasksFlow = MutableStateFlow<List<DownloadTask>>(emptyList())

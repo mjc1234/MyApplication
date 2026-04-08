@@ -1,19 +1,19 @@
 package com.mjc.core.download.service
 
 import android.util.Log
-import com.mjc.core.download.api.DownloadApiService
+import com.mjc.core.download.api.DownloadApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.ResponseBody
 import retrofit2.Response
-import java.io.InputStream
+import javax.inject.Inject
 
 /**
  * Retrofit实现的下载服务
  * 将Retrofit响应转换为不依赖Retrofit的抽象类型
  */
-class RetrofitDownloadService(
-    private val downloadApiService: DownloadApiService
+class RetrofitDownloadService @Inject constructor(
+    private val downloadApi: DownloadApi
 ) : DownloadService {
 
     override suspend fun downloadFile(
@@ -24,7 +24,7 @@ class RetrofitDownloadService(
         ifModifiedSince: String?
     ): DownloadResponse = withContext(Dispatchers.IO) {
         Log.d("Debug", "download file url $url range $range, ifRange $ifRange")
-        val response = downloadApiService.downloadFile(
+        val response = downloadApi.downloadFile(
             url = url,
             range = range,
             ifRange = ifRange,
@@ -35,7 +35,7 @@ class RetrofitDownloadService(
     }
 
     override suspend fun getFileInfo(url: String): FileInfoResponse = withContext(Dispatchers.IO) {
-        val response = downloadApiService.getFileInfo(url)
+        val response = downloadApi.getFileInfo(url)
         convertFileInfoResponse(response)
     }
 

@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.mjc.feature.download.ui.DownloadProgress
 import com.mjc.feature.download.ui.DownloadList
 import com.mjc.feature.download.ui.DownloadControls
@@ -31,9 +31,7 @@ import com.mjc.feature.download.ui.DownloadControls
 @Composable
 fun DownloadScreen(
     modifier: Modifier = Modifier,
-    viewModel: DownloadViewModel = viewModel(
-        factory = DownloadViewModelFactory(LocalContext.current)
-    ),
+    viewModel: DownloadViewModel = hiltViewModel(),
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current

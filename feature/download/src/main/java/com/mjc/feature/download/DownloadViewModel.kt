@@ -1,21 +1,22 @@
 package com.mjc.feature.download
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.mjc.feature.download.controller.DownloadController
 import com.mjc.feature.download.controller.DownloadTaskInfo
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * 下载模块的ViewModel
  * 管理下载状态和业务逻辑
  */
-class DownloadViewModel(
+@HiltViewModel
+class DownloadViewModel @Inject constructor(
     private val downloadController: DownloadController
 ) : ViewModel() {
 
@@ -140,20 +141,3 @@ sealed class DownloadState {
     data class Failed(val error: String) : DownloadState()
     data object Paused : DownloadState()
 }
-
-/**
- * DownloadViewModel的Factory
- */
-class DownloadViewModelFactory(
-    private val context: Context
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(DownloadViewModel::class.java)) {
-            val downloadController = DownloadModule.createDownloadController(context)
-            return DownloadViewModel(downloadController) as T
-        }
-        throw IllegalArgumentException("未知的ViewModel类: ${modelClass.name}")
-    }
-}
-

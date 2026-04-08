@@ -12,7 +12,7 @@ import retrofit2.http.Url
  * 下载专用API服务接口
  * 支持断点续传（Range请求）和文件信息获取
  */
-interface DownloadApiService {
+interface DownloadApi {
 
     /**
      * 下载文件（支持断点续传）

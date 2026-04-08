@@ -5,12 +5,13 @@ import com.mjc.core.download.model.DownloadTask
 import com.mjc.feature.download.repository.DownloadRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
 
 /**
  * 下载控制器实现
  * 协调下载仓库和UI层，提供统一的业务接口
  */
-class DownloadControllerImpl(
+class DownloadControllerImpl @Inject constructor(
     private val downloadRepository: DownloadRepository
 ) : DownloadController {
 

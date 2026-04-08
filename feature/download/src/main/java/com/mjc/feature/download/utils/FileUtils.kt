@@ -5,14 +5,18 @@ import android.os.Build
 import android.os.Environment
 import androidx.core.content.ContextCompat
 import com.mjc.core.download.utils.DownloadUtils
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.IOException
+import javax.inject.Inject
 
 /**
  * 文件操作工具类
  * 处理下载相关的文件操作，兼容Android 10+分区存储
  */
-class FileUtils(private val context: Context) {
+class FileUtils @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     companion object {
         private const val DOWNLOAD_SUBDIRECTORY = "Downloads"

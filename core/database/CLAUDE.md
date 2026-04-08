@@ -6,17 +6,22 @@
 
 **模块信息：**
 - **包名**: `com.mjc.core.database`
-- **依赖**: Room 2.8.4, KSP 2.3.6, Kotlin Coroutines
-- **架构**: 基于 Room 的分层持久化架构
+- **依赖**: Room 2.8.4, KSP 2.3.6, Kotlin Coroutines, Hilt 2.59.2
+- **架构**: 基于 Room 的分层持久化架构，使用 Hilt 依赖注入
 
 ## 模块结构
 
 ### 目录结构
 模块规划包含以下目录和文件：
 - **entity/**: 实体类定义（对应数据库表结构）
+  - `UserEntity.kt` - 用户实体（id, username, email, avatarUrl, createdAt, updatedAt）
 - **dao/**: 数据访问对象（Data Access Object，定义 SQL 查询）
+  - `UserDao.kt` - 用户数据访问接口（CRUD + Flow 响应式查询）
 - **converter/**: 类型转换器（TypeConverter，支持复杂类型的存储）
 - **database/**: 数据库实例定义（RoomDatabase 子类）
+  - `AppDatabase.kt` - Room 数据库入口
+- **di/**: Hilt 依赖注入模块
+  - `DatabaseModule.kt` - 提供 AppDatabase 和 UserDao 的 Hilt Module
 - **migration/**: 数据库迁移策略（版本升级时的数据迁移）
 
 ## 核心技术栈
@@ -100,21 +105,43 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 ### 分层架构
 ```
 功能模块 (feature)
-    ↓ 调用 Dao 接口
+    ↓ @Inject 构造函数注入 UserDao
 core/database
+    ├── di/DatabaseModule → Hilt Module，提供 Database 和 Dao 实例
     ├── Dao       → 定义 SQL 查询（返回 Flow / suspend 函数）
     ├── Entity    → 定义表结构
-    ├── Database  → RoomDatabase 实例（单例）
+    ├── Database  → RoomDatabase 实例（由 Hilt 管理 @Singleton）
     ├── Converter → 类型转换
     └── Migration → 版本迁移
     ↓ 操作
 SQLite 数据库
 ```
 
+### 依赖注入
+本模块使用 Hilt 进行依赖注入，通过 `DatabaseModule`（`@Module @InstallIn(SingletonComponent::class)`）提供：
+- `AppDatabase`：单例数据库实例，通过 `@Provides @Singleton` 提供
+- `UserDao`：通过 `@Provides` 从 AppDatabase 获取
+
+其他模块只需添加 `example.android.hilt` convention 插件，即可通过构造函数注入获取 `UserDao`：
+
+```kotlin
+@HiltViewModel
+class UserViewModel @Inject constructor(
+    private val userDao: UserDao
+) : ViewModel() {
+    val users = userDao.getAllUsers().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+}
+```
+
 ### 依赖关系
-- 功能模块通过 Dao 接口与数据库交互
+- 功能模块通过构造函数注入 Dao 接口与数据库交互
 - Dao 通过 Entity 定义数据结构
 - Database 汇总所有 Entity 和 Dao
+- DatabaseModule 通过 Hilt 管理所有依赖的生命周期
 - TypeConverter 处理复杂类型转换
 - Migration 处理版本升级
 
@@ -182,7 +209,9 @@ dependencies {
 - 与 Kotlin 版本解耦，独立发布
 
 ### Convention 插件
-本模块使用 `example.android.library` convention 插件统一管理 Android 库配置（compileSdk、minSdk、Java 版本等），避免各模块重复声明。
+本模块使用以下 convention 插件：
+- `example.android.library`：统一管理 Android 库配置（compileSdk、minSdk、Java 版本等），避免各模块重复声明
+- `example.android.hilt`：自动 apply KSP 插件、Hilt Gradle 插件，并添加 hilt-android + hilt-compiler 依赖
 
 ## 测试策略
 
@@ -227,12 +256,13 @@ class MigrationTest {
 
 ## 功能路线图
 
-### 阶段1: 基础设施（当前）
+### 阶段1: 基础设施（已完成）
 - [x] 模块初始化（Room + KSP 依赖配置）
 - [x] Convention 插件集成
 - [x] Room Gradle Plugin schema 导出配置
-- [ ] 基础 Entity 和 Dao 定义
-- [ ] AppDatabase 实例创建
+- [x] 基础 Entity 和 Dao 定义（UserEntity、UserDao）
+- [x] AppDatabase 实例创建
+- [x] Hilt 依赖注入集成（DatabaseModule）
 
 ### 阶段2: 核心功能
 - [ ] TypeConverter 实现
