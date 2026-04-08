@@ -32,3 +32,4 @@ include(":core:network")
 include(":core:download")
 
 includeBuild("build-logic")
+include(":core:database")
