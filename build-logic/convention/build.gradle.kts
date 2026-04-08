@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     `kotlin-dsl` // 必须开启，用于编写预编译脚本插件
+    alias(libs.plugins.android.lint)
 }
 
 group = "com.example.buildlogic" // 自定义你的插件组名
@@ -23,6 +24,7 @@ dependencies {
     compileOnly(libs.kotlin.gradlePlugin)
     compileOnly(libs.hilt.gradlePlugin)
     compileOnly(libs.ksp.gradlePlugin)
+    lintChecks(libs.androidx.lint.gradle)
 }
 
 gradlePlugin {
@@ -38,6 +40,10 @@ gradlePlugin {
         register("androidHilt") {
             id = libs.plugins.example.android.hilt.get().pluginId
             implementationClass = "HiltConventionPlugin"
+        }
+        register("androidLint") {
+            id = libs.plugins.example.android.lint.get().pluginId
+            implementationClass = "AndroidLintConventionPlugin"
         }
     }
 }

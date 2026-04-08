@@ -11,6 +11,7 @@ abstract class AndroidLibraryConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
             apply(plugin = "com.android.library")
+            apply(plugin = "example.android.lint")
 
             extensions.configure<LibraryExtension> {
                 compileSdk {

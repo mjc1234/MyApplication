@@ -11,6 +11,8 @@ abstract class AndroidComposeLibraryConventionPlugin : Plugin<Project> {
         with(target) {
             // 复用基础层
             apply(plugin = "example.android.library")
+            // Lint 检查
+            apply(plugin = "example.android.lint")
             // Compose 编译器
             apply(plugin = "org.jetbrains.kotlin.plugin.compose")
 
