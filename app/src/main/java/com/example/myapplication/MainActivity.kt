@@ -1,30 +1,42 @@
 package com.example.myapplication
 
-import android.Manifest
-import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
 import com.example.myapplication.ui.theme.MyApplicationTheme
-import com.mjc.feature.download.DownloadScreen
+import com.example.navigation.rememberNavigationState
+import com.example.scene.rememberListDetailSceneStrategy2
+import com.mjc.feature.camera.navigation.CameraKey
+import com.mjc.feature.camera.navigation.cameraEntry
+import com.mjc.feature.download.navigation.DownloadKey
+import com.mjc.feature.download.navigation.downloadEntry
+import com.mjc.feature.videoplayer.navigation.VideoPlayerKey
+import com.mjc.feature.videoplayer.navigation.videoPlayerEntry
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3AdaptiveApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // 设置屏幕方向（可选，AndroidManifest.xml已配置）
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
         // 边缘到边缘显示
         enableEdgeToEdge()
@@ -36,10 +48,47 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             MyApplicationTheme {
+                val navState = rememberNavigationState(CameraKey)
+                val listDetailStrategy = rememberListDetailSceneStrategy2<NavKey>()
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    DownloadScreen(
-                        modifier = Modifier.padding(innerPadding)
+                    NavDisplay(
+                        modifier = Modifier.padding(innerPadding),
+                        entryDecorators = listOf(
+                            rememberSaveableStateHolderNavEntryDecorator(),
+                            rememberViewModelStoreNavEntryDecorator()
+                        ),
+                        backStack = navState.backStack,
+                        entryProvider = entryProvider {
+                            cameraEntry()
+                            videoPlayerEntry()
+                            downloadEntry()
+                        },
+                        sceneStrategy = listDetailStrategy
                     )
+                    Column {
+                        Button(
+                            onClick = {
+                                navState.replace(CameraKey)
+                            }
+                        ) {
+                            Text("Go to Camera")
+                        }
+                        Button(
+                            onClick = {
+                                navState.navigateTo(VideoPlayerKey)
+                            }
+                        ) {
+                            Text("Go to Video Player")
+                        }
+                        Button(
+                            onClick = {
+                                navState.navigateTo(DownloadKey("123"))
+                            }
+                        ) {
+                            Text("Go to Download")
+                        }
+                    }
                 }
             }
         }

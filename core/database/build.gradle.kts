@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.example.android.library)
     alias(libs.plugins.example.android.hilt)
+    alias(libs.plugins.example.android.lint)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
 }

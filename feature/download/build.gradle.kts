@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.example.android.compose.library)
     alias(libs.plugins.example.android.hilt)
+    alias(libs.plugins.example.android.lint)
 }
 
 android {
@@ -10,6 +11,9 @@ android {
 dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.workmanager)
-    implementation(project(":core:download"))
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.androidx.compose.material3.adaptive.navigation3)
+
+    implementation(project(":core:download"))
+    implementation(project(":core:navigation"))
 }

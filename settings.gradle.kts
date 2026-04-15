@@ -33,3 +33,4 @@ include(":core:download")
 
 includeBuild("build-logic")
 include(":core:database")
+include(":core:navigation")

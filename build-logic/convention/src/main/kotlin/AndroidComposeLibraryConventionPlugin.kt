@@ -11,10 +11,10 @@ abstract class AndroidComposeLibraryConventionPlugin : Plugin<Project> {
         with(target) {
             // 复用基础层
             apply(plugin = "example.android.library")
-            // Lint 检查
-            apply(plugin = "example.android.lint")
             // Compose 编译器
             apply(plugin = "org.jetbrains.kotlin.plugin.compose")
+            // Kotlin 序列化
+            apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
 
             extensions.configure<LibraryExtension> {
                 buildFeatures {
@@ -37,6 +37,7 @@ abstract class AndroidComposeLibraryConventionPlugin : Plugin<Project> {
                 add("implementation", libs.findLibrary("androidx-lifecycle-viewmodel-compose").get())
                 add("implementation", libs.findLibrary("androidx-activity-compose").get())
                 add("implementation", libs.findLibrary("androidx-lifecycle-runtime-ktx").get())
+                add("implementation", libs.findLibrary("androidx-lifecycle-viewModel-navigation3").get())
                 add("implementation", libs.findLibrary("androidx-navigation3-runtime").get())
                 add("implementation", libs.findLibrary("androidx-navigation3-ui").get())
                 // Compose 测试

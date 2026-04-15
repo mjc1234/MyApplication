@@ -50,6 +50,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.lifecycle.viewModel.navigation3)
+    implementation(libs.androidx.compose.material3.adaptive.navigation3)
 
     // Hilt Navigation Compose（用于 hiltViewModel()）
     implementation(libs.hilt.navigation.compose)
@@ -62,6 +66,9 @@ dependencies {
 
     // 视频播放器模块
     implementation(project(":feature:videoplayer"))
+
+    // 导航模块
+    implementation(project(":core:navigation"))
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

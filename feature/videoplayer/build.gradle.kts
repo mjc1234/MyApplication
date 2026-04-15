@@ -1,5 +1,7 @@
 plugins {
     alias(libs.plugins.example.android.compose.library)
+    alias(libs.plugins.example.android.hilt)
+    alias(libs.plugins.example.android.lint)
 }
 
 android {
@@ -15,4 +17,7 @@ dependencies {
     implementation(libs.media3.ui.compose)
     implementation(libs.media3.session)
     implementation(libs.media3.datasource.okhttp)
+    implementation(libs.androidx.compose.material3.adaptive.navigation3)
+
+    implementation(project(":core:navigation"))
 }
