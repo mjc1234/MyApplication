@@ -104,9 +104,7 @@ class VideoPlayerViewModel(
         }
 
         if (!initialized) {
-            _playerState.value = PlayerState.Error("播放器初始化失败") {
-                viewModelScope.launch { initializePlayer() }
-            }
+            _playerState.value = PlayerState.Error("播放器初始化失败")
         }
     }
 
@@ -169,6 +167,13 @@ class VideoPlayerViewModel(
         viewModelScope.launch {
             videoPlayerController.playVideo(uri)
         }
+    }
+
+    /**
+     * 重试初始化播放器（从错误状态恢复）
+     */
+    fun retry() {
+        viewModelScope.launch { initializePlayer() }
     }
 
     override fun onCleared() {

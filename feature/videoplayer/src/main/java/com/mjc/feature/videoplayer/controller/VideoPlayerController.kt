@@ -2,6 +2,8 @@ package com.mjc.feature.videoplayer.controller
 
 import android.content.Context
 import android.net.Uri
+import android.text.SpannableString
+import android.text.SpannableStringBuilder
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
@@ -9,10 +11,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.effect.OverlayEffect
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
+import com.mjc.core.mediaeffect.SimpleTextOverlay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +96,21 @@ class VideoPlayerController(
                     )
                     .build()
                     .apply {
+                        setVideoEffects(
+                            listOf(
+                                OverlayEffect(
+                                    listOf(
+                                        SimpleTextOverlay(
+                                            textProvider = {
+                                                SpannableString("正在播放: ${videoUri?.lastPathSegment ?: "未知视频"}")
+                                            },
+                                            textColor = android.graphics.Color.WHITE,
+                                            textSizePx = 48,
+                                        )
+                                    )
+                                )
+                            )
+                        )
                         // 设置监听器
                         addListener(object : Player.Listener {
                             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -113,11 +132,7 @@ class VideoPlayerController(
                             override fun onPlayerError(error: PlaybackException) {
                                 _playerState.value = PlayerState.Error(
                                     message = error.message ?: "播放错误",
-                                    retryAction = videoUri?.let { uri ->
-                                        { coroutineScope.launch { playVideo(uri) } }
-                                    } ?: {
-                                        coroutineScope.launch { initialize(null) }
-                                    }
+                                    isRecoverable = true
                                 )
                             }
                         })
@@ -136,7 +151,7 @@ class VideoPlayerController(
         } catch (e: Exception) {
             _playerState.value = PlayerState.Error(
                 message = "播放器初始化失败: ${e.message}",
-                retryAction = { coroutineScope.launch { initialize(videoUri) } }
+                isRecoverable = true
             )
             false
         }
@@ -230,6 +245,6 @@ class VideoPlayerController(
         mediaSession?.release()
         player = null
         mediaSession = null
-        _playerState.value = PlayerState.Initializing
+        _playerState.value = PlayerState.Released
     }
 }

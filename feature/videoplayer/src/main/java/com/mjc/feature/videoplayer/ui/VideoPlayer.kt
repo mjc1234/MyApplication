@@ -2,6 +2,7 @@ package com.mjc.feature.videoplayer.ui
 
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,8 +24,15 @@ import androidx.media3.ui.compose.PlayerSurface
 import com.mjc.feature.videoplayer.controller.VideoPlayerController
 
 /**
- * 视频播放器组件，使用Media3的PlayerSurface（Compose UI组件）
- * 自动适配不同宽高比的视频，保持视频原始比例居中显示
+ * 视频播放器组件，使用Media3的PlayerSurface（Compose UI组件）。
+ * 自动适配不同宽高比的视频，保持视频原始比例居中显示。
+ *
+ * 注意：当 [controller.getPlayer] 返回 null 时（播放器尚未初始化），
+ * 本组件不渲染任何内容。调用方应配合 [PlayerState] 判断是否显示此组件。
+ *
+ * @param controller 视频播放控制器
+ * @param modifier 修饰符
+ * @param showBuffering 是否显示缓冲指示器
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -97,7 +105,9 @@ private fun VideoPlayerContent(
     ) {
         PlayerSurface(
             player = player,
-            modifier = Modifier.aspectRatio(aspectRatio),
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(aspectRatio),
         )
 
         // 缓冲指示器
