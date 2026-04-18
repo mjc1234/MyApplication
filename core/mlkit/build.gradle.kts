@@ -11,4 +11,8 @@ android {
 dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
+    api(libs.mlkit.image.labeling)
+    api(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.text.recognition.chinese)
+    implementation(libs.kotlinx.coroutines.android)
 }

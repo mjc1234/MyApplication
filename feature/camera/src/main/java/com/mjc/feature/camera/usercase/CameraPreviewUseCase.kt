@@ -52,14 +52,14 @@ class CameraPreviewUseCase(private val context: Context) {
      * 设置预览表面提供者
      */
     fun setSurfaceProvider(surfaceProvider: Preview.SurfaceProvider) {
-        _preview?.setSurfaceProvider(surfaceProvider)
+        _preview?.surfaceProvider = surfaceProvider
     }
 
     /**
      * 清理预览用例
      */
     fun clear() {
-        _preview?.setSurfaceProvider(null)
+        _preview?.surfaceProvider = null
         _preview = null
     }
 

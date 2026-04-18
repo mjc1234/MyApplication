@@ -15,6 +15,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import com.example.navigation.NavigationState
 import com.example.scene.ListDetailSceneStrategy2
+import com.mjc.feature.camera.CameraScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -29,7 +30,7 @@ fun EntryProviderScope<NavKey>.cameraEntry() {
             modifier = Modifier.fillMaxSize().background(color = Color.Cyan),
             contentAlignment = Alignment.Center
         ) {
-            Text("Camera")
+            CameraScreen {  }
         }
     }
 }

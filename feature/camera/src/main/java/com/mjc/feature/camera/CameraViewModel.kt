@@ -1,18 +1,22 @@
 package com.mjc.feature.camera
 
-import android.content.Context
-import androidx.activity.ComponentActivity
+import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mjc.feature.camera.controller.CameraController
 import com.mjc.feature.camera.controller.PermissionController
+import com.mjc.feature.camera.model.AnalysisUiComposite
+import com.mjc.feature.camera.model.DetectedImageLabelUiModel
+import com.mjc.AnalysisMode
+import com.mjc.feature.camera.model.DetectedTextUiModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,6 +53,14 @@ class CameraViewModel(
     // 闪光灯支持状态流
     private val _flashSupported = MutableStateFlow(false)
     val flashSupported: StateFlow<Boolean> = _flashSupported.asStateFlow()
+
+    // ML Kit 多处理器组合识别结果
+    private val _analysisUiState = MutableStateFlow(AnalysisUiComposite())
+    val analysisUiState: StateFlow<AnalysisUiComposite> = _analysisUiState.asStateFlow()
+
+    // 当前激活的分析模式集合
+    private val _activeAnalysisModes = MutableStateFlow<Set<AnalysisMode>>(setOf(AnalysisMode.IMAGE_LABELING))
+    val activeAnalysisModes: StateFlow<Set<AnalysisMode>> = _activeAnalysisModes.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -88,12 +100,30 @@ class CameraViewModel(
             _cameraState.value = CameraState.CameraReady
             // 更新闪光灯支持状态
             _flashSupported.value = cameraController.flashSupported
+            // 启动识别结果收集
+            startAnalysisCollection()
         } else {
             _cameraState.value = CameraState.Error("相机初始化失败") {
                 viewModelScope.launch { initializeCamera() }
             }
             // 初始化失败时，重置闪光灯状态为false
             _flashSupported.value = false
+        }
+    }
+
+    private fun startAnalysisCollection() {
+        viewModelScope.launch {
+            cameraController.analysisResultFlow
+                ?.collect { composite ->
+                    _analysisUiState.value = AnalysisUiComposite(
+                        labels = composite.imageLabels
+                            ?.filter { it.confidence >= 0.5f }
+                            ?.map { DetectedImageLabelUiModel(text = it.text, confidence = it.confidence) },
+                        text = composite.text?.let {
+                            DetectedTextUiModel(text = it.text, textBlocks = it.textBlocks.map { block -> block.text })
+                        }
+                    )
+                }
         }
     }
 
@@ -175,6 +205,28 @@ class CameraViewModel(
     fun retryInitialization() {
         viewModelScope.launch {
             initializeCamera()
+        }
+    }
+
+    /**
+     * 添加分析处理器
+     */
+    fun addAnalysisProcessor(mode: AnalysisMode) {
+        cameraController.addAnalysisProcessor(mode)
+        _activeAnalysisModes.update { it + mode }
+    }
+
+    /**
+     * 移除分析处理器
+     */
+    fun removeAnalysisProcessor(mode: AnalysisMode) {
+        cameraController.removeAnalysisProcessor(mode)
+        _activeAnalysisModes.update { it - mode }
+        _analysisUiState.update { current ->
+            when (mode) {
+                AnalysisMode.IMAGE_LABELING -> current.copy(labels = null)
+                else -> current
+            }
         }
     }
 
