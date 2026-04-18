@@ -1,17 +1,15 @@
 package com.mjc.feature.camera
 
-import android.Manifest
-import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -25,12 +23,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.lifecycleScope
 import com.mjc.feature.camera.controller.CameraController
 import com.mjc.feature.camera.controller.PermissionController
-import com.mjc.feature.camera.CameraViewModelFactory
+import com.mjc.feature.camera.ui.AnalysisModeSelector
 import com.mjc.feature.camera.ui.CameraControls
 import com.mjc.feature.camera.ui.CameraPreview
 import com.mjc.feature.camera.ui.CaptureSuccessScreen
 import com.mjc.feature.camera.ui.ErrorScreen
+import com.mjc.feature.camera.ui.LabelOverlay
 import com.mjc.feature.camera.ui.PermissionRequestScreen
+import com.mjc.AnalysisMode
+import com.mjc.feature.camera.ui.TextOverlay
 
 /**
  * 相机主界面
@@ -57,6 +58,8 @@ fun CameraScreen(
     val cameraState by viewModel.cameraState.collectAsStateWithLifecycle()
     val permissionState by viewModel.permissionState.collectAsStateWithLifecycle()
     val flashSupported by viewModel.flashSupported.collectAsStateWithLifecycle()
+    val analysisUiState by viewModel.analysisUiState.collectAsStateWithLifecycle()
+    val activeAnalysisModes by viewModel.activeAnalysisModes.collectAsStateWithLifecycle()
 
     // 权限请求启动器
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -106,6 +109,32 @@ fun CameraScreen(
                     controller = viewModel.getCameraController(),
                     modifier = Modifier.fillMaxSize()
                 )
+
+                // 分析模式选择器 + 标签覆盖层（垂直排列）
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                ) {
+                    AnalysisModeSelector(
+                        allModes = listOf(AnalysisMode.IMAGE_LABELING),
+                        activeModes = activeAnalysisModes,
+                        onModeToggle = { mode, enable ->
+                            if (enable) viewModel.addAnalysisProcessor(mode)
+                            else viewModel.removeAnalysisProcessor(mode)
+                        }
+                    )
+
+                    analysisUiState.labels?.let { labels ->
+                        if (labels.isNotEmpty()) {
+                            LabelOverlay(labels = labels)
+                        }
+                    }
+
+                    analysisUiState.text?.let { (_, textBlocks) ->
+                        TextOverlay(textBlocks = textBlocks)
+                    }
+                }
 
                 // 控制按钮
                 CameraControls(

@@ -9,17 +9,18 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.mjc.feature.camera.usercase.CameraPreviewUseCase
 import com.mjc.feature.camera.usercase.ImageCaptureUseCase
 import com.mjc.feature.camera.utils.DeviceOrientationManager
+import com.mjc.AnalysisMode
+import com.mjc.AnalysisResultComposite
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import android.view.Surface
+import com.mjc.feature.camera.usercase.AnalysisUseCase
 import com.mjc.feature.camera.utils.DeviceOrientation
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -39,7 +40,13 @@ class CameraController(
     private var cameraProvider: ProcessCameraProvider? = null
     private var previewUseCase: CameraPreviewUseCase? = null
     private var imageCaptureUseCase: ImageCaptureUseCase? = null
+    private var analysisUseCase: AnalysisUseCase? = null
     private var cameraExecutor: ExecutorService? = null
+
+    // --- Flow-based result delivery ---
+    val analysisResultFlow: StateFlow<AnalysisResultComposite>?
+        get() = analysisUseCase?.compositeStateFlow
+
     private var orientationManager: DeviceOrientationManager? = null
 
     // 屏幕方向锁定状态
@@ -106,6 +113,15 @@ class CameraController(
                 }
             }
 
+            analysisUseCase = withContext(Dispatchers.IO) {
+                AnalysisUseCase(context).apply {
+                    createAnalysisUseCase(
+                        initialModes = setOf(AnalysisMode.IMAGE_LABELING, AnalysisMode.TEXT_RECOGNITION),
+                        scope = coroutineScope
+                    )
+                }
+            }
+
             // 3. 创建相机执行器（IO线程）
             cameraExecutor = withContext(Dispatchers.IO) {
                 Executors.newSingleThreadExecutor()
@@ -165,6 +181,7 @@ class CameraController(
 //            previewUseCase?.preview?.targetRotation = rotation
             val rotation = orientation.surfaceRotation
             imageCaptureUseCase?.imageCapture?.targetRotation = rotation
+            analysisUseCase?.imageAnalysis?.targetRotation = rotation
             Log.d("Debug", "set target rotation : $rotation")
         }
     }
@@ -181,12 +198,16 @@ class CameraController(
             // 先解绑所有用例
             provider.unbindAll()
 
-            // 绑定用例到生命周期
+            // 一次性绑定所有用例，避免多次 bindToLifecycle 导致会话重建
+            val useCases = mutableListOf<androidx.camera.core.UseCase>()
+            useCases.add(preview)
+            useCases.add(imageCapture)
+            analysisUseCase?.imageAnalysis?.let { useCases.add(it) }
+
             provider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
-                preview,
-                imageCapture
+                *useCases.toTypedArray()
             )
 
             Log.d(TAG, "相机绑定成功")
@@ -274,6 +295,20 @@ class CameraController(
     }
 
     /**
+     * 添加分析处理器
+     */
+    fun addAnalysisProcessor(mode: AnalysisMode) {
+        analysisUseCase?.addProcessor(mode)
+    }
+
+    /**
+     * 移除分析处理器
+     */
+    fun removeAnalysisProcessor(mode: AnalysisMode) {
+        analysisUseCase?.removeProcessor(mode)
+    }
+
+    /**
      * 检查是否支持闪光灯
      */
     suspend fun hasFlash(): Boolean = withContext(Dispatchers.Main) {
@@ -297,6 +332,7 @@ class CameraController(
                 // 清理用例（可以在主线程，清理是轻量操作）
                 previewUseCase?.clear()
                 imageCaptureUseCase?.clear()
+                analysisUseCase?.clear()
 
                 // 关闭执行器（IO线程操作）
                 withContext(Dispatchers.IO) {
@@ -308,6 +344,7 @@ class CameraController(
                 cameraProvider = null
                 previewUseCase = null
                 imageCaptureUseCase = null
+                analysisUseCase = null
                 // 停止方向监听
                 orientationManager?.stop()
                 orientationManager = null

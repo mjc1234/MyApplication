@@ -18,4 +18,5 @@ dependencies {
     implementation(libs.androidx.compose.material3.adaptive.navigation3)
 
     implementation(project(":core:navigation"))
+    implementation(project(":core:mlkit"))
 }

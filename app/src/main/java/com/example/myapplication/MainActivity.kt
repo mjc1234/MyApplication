@@ -66,29 +66,6 @@ class MainActivity : ComponentActivity() {
                         },
                         sceneStrategy = listDetailStrategy
                     )
-                    Column {
-                        Button(
-                            onClick = {
-                                navState.replace(CameraKey)
-                            }
-                        ) {
-                            Text("Go to Camera")
-                        }
-                        Button(
-                            onClick = {
-                                navState.navigateTo(VideoPlayerKey)
-                            }
-                        ) {
-                            Text("Go to Video Player")
-                        }
-                        Button(
-                            onClick = {
-                                navState.navigateTo(DownloadKey("123"))
-                            }
-                        ) {
-                            Text("Go to Download")
-                        }
-                    }
                 }
             }
         }

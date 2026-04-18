@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import com.mjc.feature.videoplayer.VideoPlayerScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -21,7 +22,7 @@ fun EntryProviderScope<NavKey>.videoPlayerEntry() {
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text("VideoPlayer")
+            VideoPlayerScreen {  }
         }
     }
 }
