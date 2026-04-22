@@ -50,6 +50,13 @@ interface DownloadController {
     fun getDownloadSpeed(taskId: String): Flow<Long>
 
     /**
+     * 获取下载任务状态流
+     * @param taskId 下载任务ID
+     * @return 任务信息流，包含进度、速度、状态等完整信息
+     */
+    fun getTaskFlow(taskId: String): Flow<DownloadTaskInfo>
+
+    /**
      * 获取所有下载任务
      */
     fun getAllDownloads(): Flow<List<DownloadTaskInfo>>

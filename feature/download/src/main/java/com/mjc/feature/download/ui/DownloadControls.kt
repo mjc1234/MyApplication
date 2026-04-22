@@ -57,7 +57,7 @@ fun DownloadControls(
     onCancelDownload: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var url by rememberSaveable { mutableStateOf("http://192.168.31.161:8000/1.png") }
+    var url by rememberSaveable { mutableStateOf("http://192.168.31.161:8000/185726-876210695.mp4") }
     var urlError by rememberSaveable { mutableStateOf<String?>(null) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -79,7 +79,7 @@ fun DownloadControls(
                     urlError = null
                 },
                 label = { Text("文件URL") },
-                placeholder = { Text("http://ipv4.download.thinkbroadband.com/50MB.zip") },
+                placeholder = { Text("http://192.168.31.161:8000/185726-876210695.mp4") },
                 isError = urlError != null,
                 supportingText = {
                     if (urlError != null) {

@@ -6,6 +6,8 @@ import com.mjc.core.download.service.DownloadService
 import com.mjc.core.download.utils.SpeedCalculator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -27,122 +29,131 @@ class DownloadExecutor @Inject constructor(
      * @param url 文件URL
      * @param targetFile 目标文件
      * @param resumeFromBytes 从指定字节位置继续下载（断点续传）
-     * @param progressCallback 进度回调
-     * @return 下载结果
+     * @return 下载事件流，包含进度更新和最终结果
      */
-    suspend fun execute(
+    fun execute(
         url: String,
         targetFile: File,
         resumeFromBytes: Long = 0L,
         etag: String? = null,
-        lastModified: String? = null,
-        progressCallback: DownloadProgressCallback? = null
-    ): DownloadResult = withContext(Dispatchers.IO) {
+        lastModified: String? = null
+    ): Flow<DownloadEvent> = flow {
         val speedCalculator = SpeedCalculator()
         var downloadedBytes = resumeFromBytes
         var totalBytes = 0L
         var lastProgressUpdateTime = System.currentTimeMillis()
         var lastBytesUpdate = downloadedBytes
 
-        // 确保父目录存在
-        targetFile.parentFile?.mkdirs()
+        withContext(Dispatchers.IO) {
+            // 确保父目录存在
+            targetFile.parentFile?.mkdirs()
 
-        val randomAccessFile = RandomAccessFile(targetFile, "rw")
+            val randomAccessFile = RandomAccessFile(targetFile, "rw")
 
-        try {
-            // 定位到续传位置
-            if (resumeFromBytes > 0) {
-                randomAccessFile.seek(resumeFromBytes)
-            } else {
-                randomAccessFile.setLength(0)
-            }
-
-            // 构建Range头
-            val rangeHeader = if (downloadedBytes > 0) {
-                "bytes=$downloadedBytes-"
-            } else null
-
-            Log.d("Debug", "start download range : $rangeHeader")
-
-            // 执行下载请求
-            val response = downloadService.downloadFile(
-                url = url,
-                range = rangeHeader,
-                ifRange = if (downloadedBytes > 0) (etag ?: lastModified) else null
-            )
-
-            Log.d("Debug", "download response : ${response.statusCode}")
-            if (!response.isSuccessful && response.statusCode != 206) {
-                return@withContext DownloadResult.failure(
-                    IOException("下载失败: HTTP ${response.statusCode}"),
-                    downloadedBytes
-                )
-            }
-
-            val inputStream = response.bodyStream
-                ?: return@withContext DownloadResult.failure(IOException("响应体为空"), downloadedBytes)
-
-            // 计算总大小
-            val contentLength = response.contentLength
-            if (contentLength > 0) {
-                totalBytes = if (response.statusCode == 206) {
-                    downloadedBytes + contentLength
+            try {
+                // 定位到续传位置
+                if (resumeFromBytes > 0) {
+                    randomAccessFile.seek(resumeFromBytes)
                 } else {
-                    contentLength
+                    randomAccessFile.setLength(0)
                 }
+
+                // 构建Range头
+                val rangeHeader = if (downloadedBytes > 0) {
+                    "bytes=$downloadedBytes-"
+                } else null
+
+                Log.d("Debug", "start download range : $rangeHeader")
+
+                // 执行下载请求
+                val response = downloadService.downloadFile(
+                    url = url,
+                    range = rangeHeader,
+                    ifRange = if (downloadedBytes > 0) (etag ?: lastModified) else null
+                )
+
+                Log.d("Debug", "download response : ${response.statusCode}")
+                if (!response.isSuccessful && response.statusCode != 206) {
+                    emit(DownloadEvent.Failure(
+                        DownloadResult.failure(
+                            IOException("下载失败: HTTP ${response.statusCode}"),
+                            downloadedBytes
+                        )
+                    ))
+                    return@withContext
+                }
+
+                val inputStream = response.bodyStream
+                if (inputStream == null) {
+                    emit(DownloadEvent.Failure(
+                        DownloadResult.failure(IOException("响应体为空"), downloadedBytes)
+                    ))
+                    return@withContext
+                }
+
+                // 计算总大小
+                val contentLength = response.contentLength
+                if (contentLength > 0) {
+                    totalBytes = if (response.statusCode == 206) {
+                        downloadedBytes + contentLength
+                    } else {
+                        contentLength
+                    }
+                }
+
+                // 从响应头获取总大小（Content-Range: bytes 0-100/200）
+                if (totalBytes == 0L) {
+                    val contentRange = response.headers["Content-Range"]
+                    if (contentRange != null) {
+                        totalBytes = parseTotalFromContentRange(contentRange)
+                    }
+                }
+
+                emit(DownloadEvent.Progress(DownloadProgress(downloadedBytes, totalBytes, 0L)))
+
+                // 下载循环
+                val buffer = ByteArray(config.bufferSize)
+                var bytesRead: Int
+
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    // 检查是否被取消
+                    if (Thread.currentThread().isInterrupted) {
+                        throw CancellationException("下载被中断")
+                    }
+
+                    // 写入文件
+                    randomAccessFile.write(buffer, 0, bytesRead)
+                    downloadedBytes += bytesRead
+
+                    // 更新进度（限制频率）
+                    val currentTime = System.currentTimeMillis()
+                    val timeSinceLastUpdate = currentTime - lastProgressUpdateTime
+
+                    if (timeSinceLastUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
+                        val bytesSinceLastUpdate = downloadedBytes - lastBytesUpdate
+                        val speed = speedCalculator.calculateSpeed(bytesSinceLastUpdate, timeSinceLastUpdate)
+
+                        Log.d("Debug", "update progress $downloadedBytes")
+                        emit(DownloadEvent.Progress(DownloadProgress(downloadedBytes, totalBytes, speed)))
+
+                        lastProgressUpdateTime = currentTime
+                        lastBytesUpdate = downloadedBytes
+                    }
+                }
+
+                // 最终进度更新
+                emit(DownloadEvent.Progress(DownloadProgress(downloadedBytes, totalBytes, 0L)))
+
+                // 下载成功
+                emit(DownloadEvent.Success(DownloadResult.success(downloadedBytes, totalBytes)))
+
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emit(DownloadEvent.Failure(DownloadResult.failure(e, downloadedBytes)))
+            } finally {
+                randomAccessFile.close()
             }
-
-            // 从响应头获取总大小（Content-Range: bytes 0-100/200）
-            if (totalBytes == 0L) {
-                val contentRange = response.headers["Content-Range"]
-                if (contentRange != null) {
-                    totalBytes = parseTotalFromContentRange(contentRange)
-                }
-            }
-
-            progressCallback?.onProgress(DownloadProgress(downloadedBytes, totalBytes, 0L))
-
-            // 下载循环
-            val buffer = ByteArray(config.bufferSize)
-            var bytesRead: Int
-
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                // 检查是否被取消
-                if (Thread.currentThread().isInterrupted) {
-                    throw CancellationException("下载被中断")
-                }
-
-                // 写入文件
-                randomAccessFile.write(buffer, 0, bytesRead)
-                downloadedBytes += bytesRead
-
-                // 更新进度（限制频率）
-                val currentTime = System.currentTimeMillis()
-                val timeSinceLastUpdate = currentTime - lastProgressUpdateTime
-
-                if (timeSinceLastUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
-                    val bytesSinceLastUpdate = downloadedBytes - lastBytesUpdate
-                    val speed = speedCalculator.calculateSpeed(bytesSinceLastUpdate, timeSinceLastUpdate)
-
-                    Log.d("Debug", "update progress $downloadedBytes")
-                    progressCallback?.onProgress(DownloadProgress(downloadedBytes, totalBytes, speed))
-
-                    lastProgressUpdateTime = currentTime
-                    lastBytesUpdate = downloadedBytes
-                }
-            }
-
-            // 最终进度更新
-            progressCallback?.onProgress(DownloadProgress(downloadedBytes, totalBytes, 0L))
-
-            return@withContext DownloadResult.success(downloadedBytes, totalBytes)
-
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return@withContext DownloadResult.failure(e, downloadedBytes)
-        } finally {
-            randomAccessFile.close()
         }
     }
 
@@ -183,10 +194,24 @@ class DownloadExecutor @Inject constructor(
 }
 
 /**
- * 下载进度回调接口
+ * 下载事件流
+ * 通过 Flow 发射下载过程中的进度更新和最终结果
  */
-interface DownloadProgressCallback {
-    fun onProgress(progress: DownloadProgress)
+sealed class DownloadEvent {
+    /**
+     * 进度更新
+     */
+    data class Progress(val progress: DownloadProgress) : DownloadEvent()
+
+    /**
+     * 下载成功
+     */
+    data class Success(val result: DownloadResult) : DownloadEvent()
+
+    /**
+     * 下载失败
+     */
+    data class Failure(val result: DownloadResult) : DownloadEvent()
 }
 
 /**

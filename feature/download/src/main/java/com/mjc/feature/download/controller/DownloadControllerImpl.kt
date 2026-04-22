@@ -43,6 +43,12 @@ class DownloadControllerImpl @Inject constructor(
             ?: emptyFlow()
     }
 
+    override fun getTaskFlow(taskId: String): Flow<DownloadTaskInfo> {
+        return downloadRepository.getTaskStateFlow(taskId)
+            ?.map { it.toDownloadTaskInfo() }
+            ?: emptyFlow()
+    }
+
     override fun getAllDownloads(): Flow<List<DownloadTaskInfo>> {
         // 转换为UI模型
         return downloadRepository.getAllTasksFlow()

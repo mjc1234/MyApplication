@@ -1,12 +1,10 @@
 package com.mjc.feature.download.repository
 
+import com.mjc.core.download.executor.DownloadEvent
 import com.mjc.core.download.executor.DownloadExecutor
-import com.mjc.core.download.executor.DownloadProgress
-import com.mjc.core.download.executor.DownloadProgressCallback
 import com.mjc.core.download.model.DownloadStatus
 import com.mjc.core.download.model.DownloadTask
 import com.mjc.core.download.model.ResumeData
-import com.mjc.core.download.utils.SpeedCalculator
 import com.mjc.feature.download.utils.FileUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +32,6 @@ class DownloadRepository @Inject constructor(
     private val downloadTasks = ConcurrentHashMap<String, DownloadTask>()
     private val taskStateFlows = ConcurrentHashMap<String, MutableStateFlow<DownloadTask>>()
     private val allTasksFlow = MutableStateFlow<List<DownloadTask>>(emptyList())
-    private val speedCalculators = ConcurrentHashMap<String, SpeedCalculator>()
     private val mutex = Mutex()
 
     // 用于取消下载的标志
@@ -52,12 +49,17 @@ class DownloadRepository @Inject constructor(
         destinationPath: String,
         fileName: String? = null
     ): String = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            // 检查是否已有相同URL的任务
+        // 锁仅保护任务状态的查找/创建（短临界区）
+        val (taskId, isResume) = mutex.withLock {
             val existingTask = findTaskByUrl(url)
             if (existingTask != null) {
                 if (existingTask.canResume() && existingTask.status == DownloadStatus.PAUSED) {
-                    return@withContext resumeDownload(existingTask.id)
+                    cancelFlags[existingTask.id] = false
+                    updateTask(existingTask.copy(
+                        status = DownloadStatus.DOWNLOADING,
+                        updatedAt = System.currentTimeMillis()
+                    ))
+                    return@withLock existingTask.id to true
                 }
                 if (existingTask.status == DownloadStatus.DOWNLOADING) {
                     return@withContext existingTask.id
@@ -83,14 +85,13 @@ class DownloadRepository @Inject constructor(
 
             downloadTasks[taskId] = task
             taskStateFlows[taskId] = MutableStateFlow(task)
-            speedCalculators[taskId] = SpeedCalculator()
             cancelFlags[taskId] = false
-
-            // 开始下载（异步）
-            startDownloadInternal(taskId)
-
-            return@withContext taskId
+            taskId to false
         }
+
+        // 下载执行在锁外，不阻塞 pauseDownload/cancelDownload
+        startDownloadInternal(taskId, isResume)
+        taskId
     }
 
     /**
@@ -120,59 +121,62 @@ class DownloadRepository @Inject constructor(
      * 恢复下载
      */
     suspend fun resumeDownload(taskId: String): String = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            val task =
-                downloadTasks[taskId] ?: throw IllegalArgumentException("任务不存在: $taskId")
+        val restartInfo = mutex.withLock {
+            val task = downloadTasks[taskId]
+                ?: throw IllegalArgumentException("任务不存在: $taskId")
 
             if (task.status != DownloadStatus.PAUSED) {
                 throw IllegalStateException("只有暂停的任务才能恢复")
             }
 
             if (!task.canResume()) {
-                return@withContext startOrResumeDownload(task.url, task.destinationPath, task.fileName)
+                // 无法续传，提取任务信息后在锁外重新开始
+                val info = Triple(task.url, task.destinationPath, task.fileName)
+                removeTask(taskId)
+                return@withLock info
             }
 
             cancelFlags[taskId] = false
-
-            val updatedTask = task.copy(
+            updateTask(task.copy(
                 status = DownloadStatus.DOWNLOADING,
                 updatedAt = System.currentTimeMillis()
-            )
-            updateTask(updatedTask)
-
-            startDownloadInternal(taskId, true)
-
-            return@withContext taskId
+            ))
+            null // 信号：可以续传，无需重启
         }
+
+        if (restartInfo != null) {
+            return@withContext startOrResumeDownload(
+                restartInfo.first, restartInfo.second, restartInfo.third
+            )
+        }
+
+        startDownloadInternal(taskId, true)
+        taskId
     }
 
     /**
      * 取消下载
      */
     suspend fun cancelDownload(taskId: String, deleteTempFile: Boolean = true): Boolean = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            val task = downloadTasks[taskId] ?: return@withContext false
-
+        val task = mutex.withLock {
+            val t = downloadTasks[taskId] ?: return@withContext false
             cancelFlags[taskId] = true
-
-            val updatedTask = task.copy(
+            updateTask(t.copy(
                 status = DownloadStatus.CANCELLED,
                 speedBytesPerSecond = 0L,
                 updatedAt = System.currentTimeMillis()
-            )
-            updateTask(updatedTask)
-
-            speedCalculators.remove(taskId)
+            ))
             cancelFlags.remove(taskId)
-
-            if (deleteTempFile) {
-                task.resumeData?.let { resumeData ->
-                    File(resumeData.tempFilePath).delete()
-                }
-            }
-
-            return@withContext true
+            t
         }
+
+        // 文件删除在锁外执行
+        if (deleteTempFile) {
+            task.resumeData?.let { resumeData ->
+                File(resumeData.tempFilePath).delete()
+            }
+        }
+        true
     }
 
     /**
@@ -204,39 +208,45 @@ class DownloadRepository @Inject constructor(
     // region 内部方法
 
     private suspend fun startDownloadInternal(taskId: String, isResume: Boolean = false) {
-        val task = downloadTasks[taskId] ?: return
-
         try {
             if (!isResume) {
-                val updatedTask = task.copy(
-                    status = DownloadStatus.DOWNLOADING,
-                    updatedAt = System.currentTimeMillis()
-                )
-                updateTask(updatedTask)
+                mutex.withLock {
+                    val task = downloadTasks[taskId] ?: return@withLock
+                    updateTask(task.copy(
+                        status = DownloadStatus.DOWNLOADING,
+                        updatedAt = System.currentTimeMillis()
+                    ))
+                }
             }
 
             downloadFile(taskId, isResume)
         } catch (_: CancellationException) {
-            val cancelledTask = task.copy(
-                status = DownloadStatus.CANCELLED,
-                speedBytesPerSecond = 0L,
-                updatedAt = System.currentTimeMillis()
-            )
-            updateTask(cancelledTask)
+            mutex.withLock {
+                downloadTasks[taskId]?.let { task ->
+                    updateTask(task.copy(
+                        status = DownloadStatus.CANCELLED,
+                        speedBytesPerSecond = 0L,
+                        updatedAt = System.currentTimeMillis()
+                    ))
+                    removeTask(taskId)
+                }
+            }
             throw CancellationException()
         } catch (_: Exception) {
-            val failedTask = task.copy(
-                status = DownloadStatus.FAILED,
-                speedBytesPerSecond = 0L,
-                updatedAt = System.currentTimeMillis()
-            )
-            updateTask(failedTask)
+            mutex.withLock {
+                downloadTasks[taskId]?.let { task ->
+                    updateTask(task.copy(
+                        status = DownloadStatus.FAILED,
+                        speedBytesPerSecond = 0L,
+                        updatedAt = System.currentTimeMillis()
+                    ))
+                }
+            }
         }
     }
 
     private suspend fun downloadFile(taskId: String, isResume: Boolean) {
         val task = downloadTasks[taskId] ?: return
-        val speedCalculator = speedCalculators[taskId] ?: SpeedCalculator()
 
         val resumeFromBytes = if (isResume && task.canResume()) task.downloadedBytes else 0L
         val tempFilePath = if (isResume && task.canResume()) {
@@ -264,83 +274,92 @@ class DownloadRepository @Inject constructor(
             }
         }
 
-        var lastProgressUpdateTime = System.currentTimeMillis()
-        var lastBytesUpdate = resumeFromBytes
+        var lastKnownDownloadedBytes = resumeFromBytes
 
-        // 使用 DownloadExecutor 执行下载
-        val result = executor.execute(
-            url = task.url,
-            targetFile = tempFile,
-            resumeFromBytes = resumeFromBytes,
-            etag = etag,
-            lastModified = lastModified,
-            progressCallback = object : DownloadProgressCallback {
-                override fun onProgress(progress: DownloadProgress) {
-                    // 检查是否需要取消/暂停
-                    if (cancelFlags[taskId] == true) {
-                        throw CancellationException("下载被用户取消")
-                    }
+        try {
+            // 使用 Flow 收集下载事件（Executor 已以 250ms 间隔节流）
+            executor.execute(
+                url = task.url,
+                targetFile = tempFile,
+                resumeFromBytes = resumeFromBytes,
+                etag = etag,
+                lastModified = lastModified
+            ).collect { event ->
+                when (event) {
+                    is DownloadEvent.Progress -> {
+                        // 检查是否需要取消/暂停
+                        if (cancelFlags[taskId] == true) {
+                            throw CancellationException("下载被用户取消")
+                        }
 
-                    val currentTask = downloadTasks[taskId]
-                    if (currentTask?.status != DownloadStatus.DOWNLOADING) {
-                        throw CancellationException("下载状态已变更")
-                    }
+                        val currentTask = downloadTasks[taskId]
+                        if (currentTask?.status != DownloadStatus.DOWNLOADING) {
+                            throw CancellationException("下载状态已变更")
+                        }
 
-                    val currentTime = System.currentTimeMillis()
-                    val timeSinceLastUpdate = currentTime - lastProgressUpdateTime
-
-                    if (timeSinceLastUpdate >= 250) {
-                        val bytesSinceLastUpdate = progress.downloadedBytes - lastBytesUpdate
-                        val speed = speedCalculator.calculateSpeed(bytesSinceLastUpdate, timeSinceLastUpdate)
+                        lastKnownDownloadedBytes = event.progress.downloadedBytes
 
                         val updatedTask = currentTask.copy(
-                            downloadedBytes = progress.downloadedBytes,
-                            totalBytes = progress.totalBytes,
-                            progress = progress.progress,
-                            speedBytesPerSecond = speed,
-                            updatedAt = currentTime
+                            downloadedBytes = event.progress.downloadedBytes,
+                            totalBytes = event.progress.totalBytes,
+                            progress = event.progress.progress,
+                            speedBytesPerSecond = event.progress.speedBytesPerSecond,
+                            updatedAt = System.currentTimeMillis()
                         )
                         updateTask(updatedTask)
+                    }
+                    is DownloadEvent.Success -> {
+                        // 下载完成，移动文件
+                        fileUtils.moveTempFileToDestination(tempFile, task.destinationPath, task.fileName)
 
-                        lastProgressUpdateTime = currentTime
-                        lastBytesUpdate = progress.downloadedBytes
+                        val completedTask = downloadTasks[taskId]?.copy(
+                            status = DownloadStatus.COMPLETED,
+                            progress = 1f,
+                            downloadedBytes = event.result.downloadedBytes,
+                            speedBytesPerSecond = 0L,
+                            resumeData = null,
+                            updatedAt = System.currentTimeMillis()
+                        ) ?: return@collect
+
+                        updateTask(completedTask)
+                        removeTask(taskId)
+                    }
+                    is DownloadEvent.Failure -> {
+                        throw event.result.error ?: java.io.IOException("下载失败")
                     }
                 }
             }
-        )
-
-        if (result.success) {
-            // 下载完成，移动文件
-            fileUtils.moveTempFileToDestination(tempFile, task.destinationPath, task.fileName)
-
-            val completedTask = downloadTasks[taskId]?.copy(
-                status = DownloadStatus.COMPLETED,
-                progress = 1f,
-                downloadedBytes = result.downloadedBytes,
-                speedBytesPerSecond = 0L,
-                resumeData = null,
-                updatedAt = System.currentTimeMillis()
-            ) ?: return
-
-            updateTask(completedTask)
-        } else if (downloadTasks[taskId]?.status == DownloadStatus.PAUSED) {
-            // 保存断点信息
-            val resumeData = ResumeData(
-                tempFilePath = tempFilePath,
-                downloadedBytes = result.downloadedBytes,
-                totalBytes = totalBytes,
-                etag = etag,
-                lastModified = lastModified,
-                savedAt = System.currentTimeMillis()
-            )
-            val updatedTask = downloadTasks[taskId]?.copy(resumeData = resumeData) ?: return
-            updateTask(updatedTask)
+        } catch (e: CancellationException) {
+            // 保存断点信息（暂停状态）
+            if (downloadTasks[taskId]?.status == DownloadStatus.PAUSED) {
+                val resumeData = ResumeData(
+                    tempFilePath = tempFilePath,
+                    downloadedBytes = lastKnownDownloadedBytes,
+                    totalBytes = totalBytes,
+                    etag = etag,
+                    lastModified = lastModified,
+                    savedAt = System.currentTimeMillis()
+                )
+                val updatedTask = downloadTasks[taskId]?.copy(resumeData = resumeData) ?: throw e
+                updateTask(updatedTask)
+            }
+            throw e
         }
     }
 
     private fun updateTask(task: DownloadTask) {
         downloadTasks[task.id] = task
         taskStateFlows[task.id]?.value = task
+        allTasksFlow.value = downloadTasks.values.toList()
+    }
+
+    /**
+     * 移除任务，释放 StateFlow 资源
+     * 先更新 allTasksFlow（移除前从列表中删除），再清理 per-task 的 StateFlow
+     */
+    private fun removeTask(taskId: String) {
+        downloadTasks.remove(taskId)
+        taskStateFlows.remove(taskId)
         allTasksFlow.value = downloadTasks.values.toList()
     }
 

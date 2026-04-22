@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             AppTheme {
-                val navState = rememberNavigationState(CameraKey)
+                val navState = rememberNavigationState(DownloadKey(""))
                 val listDetailStrategy = rememberListDetailSceneStrategy2<NavKey>()
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->

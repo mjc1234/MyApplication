@@ -2,7 +2,7 @@
 
 ## 模块概述
 
-`core:download` 是一个基于 OkHttp/Retrofit 的文件下载核心模块，提供断点续传、进度回调、自动重试等功能。通过 `DownloadService` 接口实现网络层解耦，功能模块不直接依赖 Retrofit。
+`core:download` 是一个基于 OkHttp/Retrofit 的文件下载核心模块，提供断点续传、进度上报、自动重试等功能。通过 `DownloadService` 接口实现网络层解耦，功能模块不直接依赖 Retrofit。下载进度和结果通过 Kotlin Flow 以 `DownloadEvent` 事件流形式上报。
 
 - **命名空间**: `com.mjc.core.download`
 - **类型**: Android Library
@@ -20,7 +20,7 @@ core/download/src/main/java/com/mjc/core/download/
 ├── config/
 │   └── DownloadConfig.kt          # 下载配置（超时、重试、缓存等）
 ├── executor/
-│   └── DownloadExecutor.kt        # 下载执行器（核心下载逻辑+进度回调）
+│   └── DownloadExecutor.kt        # 下载执行器（核心下载逻辑+Flow事件流）
 ├── ext/
 │   └── DownloadResponseExt.kt     # ResponseBody/Response 扩展函数
 ├── interceptor/
@@ -66,9 +66,9 @@ DownloadApiService        ← Retrofit API 接口
 - `getFileInfoWithDetails(url)` - 获取详细的文件信息
 
 **DownloadExecutor** - 下载执行器
-- `execute(url, targetFile, resumeFromBytes, etag, ...)` - 执行下载，返回 `DownloadResult`
+- `execute(url, targetFile, resumeFromBytes, etag, ...)` - 执行下载，返回 `Flow<DownloadEvent>`
 - `getFileInfo(url)` - 获取文件信息，返回 `FileInfoResult`
-- 进度回调间隔：250ms
+- 进度事件发射间隔：250ms
 
 **DownloadConfig** - 配置项
 - 连接超时：60s，读取超时：300s，写入超时：60s
@@ -87,21 +87,22 @@ val downloadService = DownloadModule.createDownloadService()
 // 2. 创建 Executor
 val executor = DownloadExecutor(downloadService)
 
-// 3. 执行下载
-val result = executor.execute(
+// 3. 执行下载，收集 Flow 事件流
+executor.execute(
     url = "https://example.com/file.zip",
-    targetFile = File("/sdcard/Download/file.zip"),
-    progressCallback = object : DownloadProgressCallback {
-        override fun onProgress(progress: DownloadProgress) {
-            Log.d("Download", "进度: ${(progress.progress * 100).toInt()}%")
+    targetFile = File("/sdcard/Download/file.zip")
+).collect { event ->
+    when (event) {
+        is DownloadEvent.Progress -> {
+            Log.d("Download", "进度: ${(event.progress.progress * 100).toInt()}%")
+        }
+        is DownloadEvent.Success -> {
+            Log.d("Download", "下载完成: ${event.result.totalBytes} bytes")
+        }
+        is DownloadEvent.Failure -> {
+            Log.e("Download", "下载失败: ${event.result.error?.message}")
         }
     }
-)
-
-if (result.success) {
-    Log.d("Download", "下载完成: ${result.totalBytes} bytes")
-} else {
-    Log.e("Download", "下载失败: ${result.error?.message}")
 }
 ```
 
@@ -110,13 +111,15 @@ if (result.success) {
 ```kotlin
 // 获取已下载字节数，从该位置继续
 val existingBytes = targetFile.length()
-val result = executor.execute(
+executor.execute(
     url = url,
     targetFile = targetFile,
     resumeFromBytes = existingBytes,
     etag = fileInfo.eTag,  // 用于验证资源未改变
     lastModified = fileInfo.lastModified
-)
+).collect { event ->
+    // 处理下载事件
+}
 ```
 
 ### 自定义配置
@@ -141,6 +144,7 @@ val service = DownloadModule.createDownloadService(client = client)
 | `DownloadError` | 密封类：NetworkError, StorageError, PermissionError, FileError, Cancelled, UnknownError |
 | `DownloadResult` | 下载结果（success, downloadedBytes, totalBytes, error） |
 | `DownloadProgress` | 进度数据（downloadedBytes, totalBytes, speedBytesPerSecond, progress） |
+| `DownloadEvent` | 下载事件流（Progress/Success/Failure），通过 Flow 发射 |
 | `ResumeData` | 断点续传数据（tempFilePath, etag, lastModified） |
 
 ## 依赖关系
@@ -160,7 +164,8 @@ implementation(libs.kotlinx.coroutines.android)
 ## 注意事项
 
 - DownloadExecutor 使用 `Dispatchers.IO` 执行下载操作
-- 进度回调频率限制为每 250ms 一次，避免 UI 线程压力
+- 进度事件通过 `Flow<DownloadEvent>` 发射，频率限制为每 250ms 一次，避免 UI 线程压力
+- 取消下载通过协程取消机制（`CancellationException`）实现
 - OkHttp 客户端实例有内部缓存，相同配置会复用同一实例
 - Range 请求头格式为 `bytes=start-end`（如 `bytes=1024-`）
 - 206 状态码表示部分内容响应（断点续传成功）

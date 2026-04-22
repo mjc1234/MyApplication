@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.example.scene.ListDetailSceneStrategy2
+import com.mjc.feature.download.DownloadScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -21,11 +22,6 @@ fun EntryProviderScope<NavKey>.downloadEntry() {
     entry<DownloadKey>(
         metadata = ListDetailSceneStrategy2.detailPane()
     ) { key ->
-        Box(
-            modifier = Modifier.fillMaxSize().background(color = androidx.compose.ui.graphics.Color.DarkGray),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Download: ${key.url}")
-        }
+        DownloadScreen {  }
     }
 }
