@@ -166,15 +166,12 @@ class DownloadRepository @Inject constructor(
                 speedBytesPerSecond = 0L,
                 updatedAt = System.currentTimeMillis()
             ))
-            cancelFlags.remove(taskId)
             t
         }
 
         // 文件删除在锁外执行
         if (deleteTempFile) {
-            task.resumeData?.let { resumeData ->
-                File(resumeData.tempFilePath).delete()
-            }
+            cleanupTempFile(task)
         }
         true
     }
@@ -223,13 +220,27 @@ class DownloadRepository @Inject constructor(
         } catch (_: CancellationException) {
             mutex.withLock {
                 downloadTasks[taskId]?.let { task ->
-                    updateTask(task.copy(
-                        status = DownloadStatus.CANCELLED,
-                        speedBytesPerSecond = 0L,
-                        updatedAt = System.currentTimeMillis()
-                    ))
-                    removeTask(taskId)
+                    if (task.status == DownloadStatus.PAUSED) {
+                        // 暂停：保留任务和 PAUSED 状态（resumeData 已在 downloadFile 中保存）
+                    } else {
+                        // 真正的取消
+                        updateTask(task.copy(
+                            status = DownloadStatus.CANCELLED,
+                            speedBytesPerSecond = 0L,
+                            updatedAt = System.currentTimeMillis()
+                        ))
+                        // 清理临时文件
+                        cleanupTempFile(task)
+                        removeTask(taskId)
+                    }
+                    cancelFlags.remove(taskId)
                 }
+            }
+            if (downloadTasks.containsKey(taskId) &&
+                downloadTasks[taskId]?.status == DownloadStatus.PAUSED
+            ) {
+                // 暂停不需要向上抛出异常
+                return
             }
             throw CancellationException()
         } catch (_: Exception) {
@@ -387,6 +398,18 @@ class DownloadRepository @Inject constructor(
             dir.mkdirs()
         }
         return File(dir, "${fileName}.tmp").absolutePath
+    }
+
+    /**
+     * 清理临时文件
+     * 优先使用 resumeData 中的路径，否则根据 destinationPath 和 fileName 推导
+     */
+    private fun cleanupTempFile(task: DownloadTask) {
+        val tempFile = task.resumeData?.let { File(it.tempFilePath) }
+            ?: File(File(task.destinationPath), "${task.fileName}.tmp")
+        if (tempFile.exists()) {
+            tempFile.delete()
+        }
     }
 
     // endregion

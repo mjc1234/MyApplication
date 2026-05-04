@@ -1,6 +1,5 @@
 package com.mjc.feature.videoplayer
 
-import android.content.Context
 import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.compose.foundation.clickable
@@ -19,12 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.ViewModelProvider
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.util.UnstableApi
-import com.mjc.feature.videoplayer.controller.VideoPlayerController
 import com.mjc.feature.videoplayer.controller.PlayerState
 import com.mjc.feature.videoplayer.ui.VideoPlayer
 import com.mjc.feature.videoplayer.ui.PlayerControls
@@ -41,27 +36,10 @@ import kotlinx.coroutines.delay
 @Composable
 fun VideoPlayerScreen(
     modifier: Modifier = Modifier,
+    viewModel: VideoPlayerViewModel = hiltViewModel(),
     onBack: () -> Unit = {}
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    // 创建视频播放控制器（与ViewModel共享）
-    val videoPlayerController = remember {
-        val coroutineScope = lifecycleOwner.lifecycleScope
-        VideoPlayerController(
-            context = context,
-            lifecycleOwner = lifecycleOwner,
-            coroutineScope = coroutineScope
-        )
-    }
-
-    // 视频播放ViewModel
-    val viewModel: VideoPlayerViewModel = viewModel(
-        factory = remember {
-            VideoPlayerViewModelFactory(videoPlayerController)
-        }
-    )
+    val videoPlayerController = viewModel.videoPlayerController
 
     val playerState by viewModel.playerState.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()

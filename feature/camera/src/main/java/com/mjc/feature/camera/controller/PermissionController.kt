@@ -5,16 +5,19 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import javax.inject.Inject
 
 /**
  * 权限控制器，处理相机和音频权限
  */
-class PermissionController(private val context: Context) {
+class PermissionController @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     companion object {
         const val REQUEST_CODE_CAMERA = 1001
@@ -32,7 +35,7 @@ class PermissionController(private val context: Context) {
     /**
      * 检查所有必要权限是否已授予
      */
-    suspend fun checkPermissions(): Boolean {
+    fun checkPermissions(): Boolean {
         return REQUIRED_PERMISSIONS.all { permission ->
             ContextCompat.checkSelfPermission(context, permission) ==
                 PackageManager.PERMISSION_GRANTED

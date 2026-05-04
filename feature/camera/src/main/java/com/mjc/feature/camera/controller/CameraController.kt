@@ -22,8 +22,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.mjc.feature.camera.usercase.AnalysisUseCase
 import com.mjc.feature.camera.utils.DeviceOrientation
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import javax.inject.Inject
 
 /**
  * 相机控制器，管理CameraX生命周期和相机操作
@@ -33,6 +35,17 @@ class CameraController(
     private val lifecycleOwner: LifecycleOwner,
     private val coroutineScope: CoroutineScope
 ) {
+
+    /**
+     * CameraController工厂，由Hilt注入Context，运行时提供LifecycleOwner和CoroutineScope
+     */
+    class Factory @Inject constructor(
+        @ApplicationContext private val context: Context
+    ) {
+        fun create(lifecycleOwner: LifecycleOwner, coroutineScope: CoroutineScope): CameraController {
+            return CameraController(context, lifecycleOwner, coroutineScope)
+        }
+    }
     companion object {
         private const val TAG = "CameraController"
     }

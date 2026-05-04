@@ -10,6 +10,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -20,9 +21,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.lifecycleScope
-import com.mjc.feature.camera.controller.CameraController
-import com.mjc.feature.camera.controller.PermissionController
+import com.mjc.AnalysisMode
 import com.mjc.feature.camera.ui.AnalysisModeSelector
 import com.mjc.feature.camera.ui.CameraControls
 import com.mjc.feature.camera.ui.CameraPreview
@@ -30,7 +29,6 @@ import com.mjc.feature.camera.ui.CaptureSuccessScreen
 import com.mjc.feature.camera.ui.ErrorScreen
 import com.mjc.feature.camera.ui.LabelOverlay
 import com.mjc.feature.camera.ui.PermissionRequestScreen
-import com.mjc.AnalysisMode
 import com.mjc.feature.camera.ui.TextOverlay
 
 /**
@@ -39,22 +37,16 @@ import com.mjc.feature.camera.ui.TextOverlay
 @Composable
 fun CameraScreen(
     modifier: Modifier = Modifier,
+    viewModel: CameraViewModel = viewModel(),
     onBack: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val viewModel: CameraViewModel = viewModel(
-        factory = remember {
-            val coroutineScope = lifecycleOwner.lifecycleScope
+    // 绑定LifecycleOwner到ViewModel，触发相机初始化
+    LaunchedEffect(lifecycleOwner) {
+        viewModel.attachLifecycle(lifecycleOwner)
+    }
 
-            // 创建依赖
-            val permissionController = PermissionController(context)
-            val cameraController = CameraController(context, lifecycleOwner, coroutineScope)
-
-            // 创建ViewModel工厂
-            CameraViewModelFactory(permissionController, cameraController)
-        }
-    )
     val cameraState by viewModel.cameraState.collectAsStateWithLifecycle()
     val permissionState by viewModel.permissionState.collectAsStateWithLifecycle()
     val flashSupported by viewModel.flashSupported.collectAsStateWithLifecycle()

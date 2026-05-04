@@ -1,32 +1,43 @@
 package com.mjc.feature.camera
 
-import android.util.Log
+import android.os.Bundle
 import androidx.activity.result.ActivityResultLauncher
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.map
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
+import com.mjc.AnalysisMode
 import com.mjc.feature.camera.controller.CameraController
 import com.mjc.feature.camera.controller.PermissionController
 import com.mjc.feature.camera.model.AnalysisUiComposite
 import com.mjc.feature.camera.model.DetectedImageLabelUiModel
-import com.mjc.AnalysisMode
 import com.mjc.feature.camera.model.DetectedTextUiModel
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import javax.inject.Inject
 
 /**
  * 相机ViewModel，管理相机状态和业务逻辑
  */
-class CameraViewModel(
+@HiltViewModel
+class CameraViewModel @Inject constructor(
+    private val stateHandle: SavedStateHandle,
     private val permissionController: PermissionController,
-    private val cameraController: CameraController
+    private val cameraControllerFactory: CameraController.Factory
 ) : ViewModel() {
 
     /**
@@ -41,6 +52,8 @@ class CameraViewModel(
         data class Success(val imageUri: String) : CameraState()
         data class Error(val message: String, val retryAction: () -> Unit = {}) : CameraState()
     }
+
+    private lateinit var cameraController: CameraController
 
     private val _cameraState = MutableStateFlow<CameraState>(CameraState.Initializing)
     val cameraState: StateFlow<CameraState> = _cameraState.asStateFlow()
@@ -62,7 +75,15 @@ class CameraViewModel(
     private val _activeAnalysisModes = MutableStateFlow<Set<AnalysisMode>>(setOf(AnalysisMode.IMAGE_LABELING))
     val activeAnalysisModes: StateFlow<Set<AnalysisMode>> = _activeAnalysisModes.asStateFlow()
 
-    init {
+    /**
+     * 绑定LifecycleOwner并初始化相机
+     * 在Composable中调用，提供Activity的LifecycleOwner
+     */
+    fun attachLifecycle(lifecycleOwner: LifecycleOwner) {
+        if (::cameraController.isInitialized) return
+
+        cameraController = cameraControllerFactory.create(lifecycleOwner, viewModelScope)
+
         viewModelScope.launch {
             initializeCamera()
         }
@@ -262,7 +283,9 @@ class CameraViewModel(
      */
     override fun onCleared() {
         super.onCleared()
-        cameraController.release()
+        if (::cameraController.isInitialized) {
+            cameraController.release()
+        }
     }
 
     /**
@@ -294,31 +317,6 @@ class CameraViewModel(
     }
 
     companion object {
-        /**
-         * 创建ViewModel工厂函数（用于Compose中注入依赖）
-         */
-        fun createFactory(
-            permissionController: PermissionController,
-            cameraController: CameraController
-        ): () -> CameraViewModel = {
-            CameraViewModel(permissionController, cameraController)
-        }
-    }
-}
-
-/**
- * CameraViewModel的Factory类，实现ViewModelProvider.Factory接口
- */
-class CameraViewModelFactory(
-    private val permissionController: PermissionController,
-    private val cameraController: CameraController
-) : ViewModelProvider.Factory {
-
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(CameraViewModel::class.java)) {
-            return CameraViewModel(permissionController, cameraController) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        val MY_REPOSITORY_KEY = CreationExtras.Key<Int>()
     }
 }

@@ -2,11 +2,11 @@ package com.mjc.feature.videoplayer
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import com.mjc.feature.videoplayer.controller.PlayerState
 import com.mjc.feature.videoplayer.controller.VideoPlayerController
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -16,13 +16,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 /**
  * 视频播放器ViewModel，管理播放器状态和业务逻辑
  */
+@HiltViewModel
 @UnstableApi
-class VideoPlayerViewModel(
-    private val videoPlayerController: VideoPlayerController
+class VideoPlayerViewModel @Inject constructor(
+    val videoPlayerController: VideoPlayerController
 ) : ViewModel() {
 
     companion object {
@@ -179,22 +181,5 @@ class VideoPlayerViewModel(
     override fun onCleared() {
         super.onCleared()
         videoPlayerController.release()
-    }
-}
-
-/**
- * VideoPlayerViewModel的Factory类，实现ViewModelProvider.Factory接口
- */
-@UnstableApi
-class VideoPlayerViewModelFactory(
-    private val videoPlayerController: VideoPlayerController
-) : ViewModelProvider.Factory {
-
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(VideoPlayerViewModel::class.java)) {
-            return VideoPlayerViewModel(videoPlayerController) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }

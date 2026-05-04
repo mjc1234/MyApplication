@@ -18,6 +18,7 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.androidx.compose.material3.adaptive.navigation3)
+    implementation(libs.hilt.navigation.compose)
 
     implementation(project(":core:navigation"))
     implementation(project(":core:ui"))

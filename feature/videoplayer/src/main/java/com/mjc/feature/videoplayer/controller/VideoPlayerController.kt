@@ -3,10 +3,6 @@ package com.mjc.feature.videoplayer.controller
 import android.content.Context
 import android.net.Uri
 import android.text.SpannableString
-import android.text.SpannableStringBuilder
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -17,22 +13,20 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
 import com.mjc.core.mediaeffect.SimpleTextOverlay
-import kotlinx.coroutines.CoroutineScope
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 /**
  * 视频播放器控制器，管理ExoPlayer生命周期和播放操作
  */
 @UnstableApi
-class VideoPlayerController(
-    private val context: Context,
-    private val lifecycleOwner: LifecycleOwner,
-    private val coroutineScope: CoroutineScope
+class VideoPlayerController @Inject constructor(
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val TAG = "VideoPlayerController"
@@ -48,19 +42,6 @@ class VideoPlayerController(
     private var isReleased = false
     private val _playerState = MutableStateFlow<PlayerState>(PlayerState.Initializing)
     val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
-
-    private val lifecycleObserver = LifecycleEventObserver { _, event ->
-        when (event) {
-            Lifecycle.Event.ON_PAUSE -> pause()
-            Lifecycle.Event.ON_RESUME -> play()
-            Lifecycle.Event.ON_DESTROY -> release()
-            else -> Unit
-        }
-    }
-
-    init {
-        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
-    }
 
     /**
      * 初始化播放器
@@ -236,9 +217,6 @@ class VideoPlayerController(
     fun release() {
         if (isReleased) return
         isReleased = true
-
-        // 移除生命周期观察者，防止释放后收到事件
-        lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
 
         player?.stop()
         player?.release()

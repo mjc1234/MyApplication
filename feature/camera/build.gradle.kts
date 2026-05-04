@@ -16,6 +16,7 @@ dependencies {
     implementation(libs.camerax.video)
     implementation(libs.camerax.compose)
     implementation(libs.androidx.compose.material3.adaptive.navigation3)
+    implementation(libs.hilt.navigation.compose)
 
     implementation(project(":core:navigation"))
     implementation(project(":core:mlkit"))
